@@ -89,7 +89,7 @@ $('closeSettings').onclick=()=>$('settings').style.display='none';
 $('fontSize').oninput=e=>$('scriptOverlay').style.fontSize=e.target.value+'px';
 $('panelHeight').oninput=e=>$('scriptOverlay').style.height=e.target.value+'%';
 $('textColor').oninput=e=>$('scriptOverlay').style.color=e.target.value;
-$('bgColor').oninput=e=>$ $('scriptOverlay').style.backgroundColor=e.target.value;
+$('bgColor').oninput=e=> $('scriptOverlay').style.backgroundColor=e.target.value;
 $('alignment').onchange=e=>$('scriptOverlay').className=e.target.value;
 function applyOffset(){$('scriptText').style.transform=`translateY(${-offset}px)`}
 function tick(t){if(!scrolling)return;if(last){offset+=(t-last)*Number($('speed').value)/2500;applyOffset()}last=t;raf=requestAnimationFrame(tick)}
