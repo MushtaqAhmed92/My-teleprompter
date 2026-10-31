@@ -1,0 +1,136 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Teleprompter</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101820;color:white;font-family:Arial,sans-serif;padding:12px}
+h2{text-align:center;color:#55d6be}
+textarea{width:100%;height:100px;padding:12px;font-size:17px;border-radius:9px}
+button{padding:11px 13px;margin:4px;border:0;border-radius:8px;background:#168b76;color:white;font-size:15px}
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+label{font-size:14px}
+#reader{height:210px;overflow:auto;background:#fff;color:#111;padding:18px;border-radius:10px;font-size:28px;line-height:1.6;white-space:pre-wrap}
+video{width:100%;background:#000;border-radius:10px;margin-top:12px;max-height:420px}
+h3{margin-bottom:8px}
+input[type=range]{width:110px}
+</style>
+</head>
+<body>
+<h2>MY TELEPROMPTER</h2>
+
+<h3>My Script</h3>
+<textarea id="script" placeholder="Yahan apni video ki script likhiye..."></textarea>
+<button onclick="loadScript()">Show Script</button>
+
+<h3>Reading Screen</h3>
+<div id="reader">Your script will appear here...</div>
+
+<div class="controls">
+<button onclick="startScroll()">▶ Start</button>
+<button onclick="stopScroll()">⏸ Pause</button>
+<button onclick="resetScroll()">↺ Reset</button>
+</div>
+
+<div class="controls">
+<label>Speed</label>
+<input id="speed" type="range" min="1" max="10" value="3">
+<label>Font</label>
+<input id="font" type="range" min="18" max="48" value="28">
+</div>
+
+<h3>Camera Video</h3>
+<video id="video" autoplay playsinline muted></video>
+
+<div class="controls">
+<button onclick="openCamera('user')">Front Camera</button>
+<button onclick="openCamera('environment')">Back Camera</button>
+<button onclick="startRecording()">🔴 Record</button>
+<button onclick="stopRecording()">■ Stop & Save</button>
+</div>
+
+<p id="status">Camera not started</p>
+
+<script>
+const reader=document.getElementById('reader');
+const video=document.getElementById('video');
+let timer=null,stream=null,recorder=null,chunks=[];
+
+function loadScript(){
+reader.textContent=document.getElementById('script').value;
+reader.scrollTop=0;
+}
+
+function startScroll(){
+if(timer)return;
+timer=setInterval(()=>{
+reader.scrollTop+=Number(document.getElementById('speed').value)*0.5;
+},30);
+}
+
+function stopScroll(){
+clearInterval(timer);
+timer=null;
+}
+
+function resetScroll(){
+stopScroll();
+reader.scrollTop=0;
+}
+
+document.getElementById('font').oninput=function(){
+reader.style.fontSize=this.value+'px';
+};
+
+async function openCamera(mode){
+try{
+if(stream)stream.getTracks().forEach(t=>t.stop());
+stream=await navigator.mediaDevices.getUserMedia({
+video:{facingMode:mode},
+audio:true
+});
+video.srcObject=stream;
+document.getElementById('status').textContent='Camera ready';
+}catch(e){
+document.getElementById('status').textContent='Camera error: '+e.message;
+}
+}
+
+function startRecording(){
+if(!stream){
+alert('Pehle camera start kijiye');
+return;
+}
+chunks=[];
+let type=MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+?'video/webm;codecs=vp8,opus':'video/webm';
+recorder=new MediaRecorder(stream,{mimeType:type});
+recorder.ondataavailable=e=>{
+if(e.data.size>0)chunks.push(e.data);
+};
+recorder.onstop=()=>{
+let blob=new Blob(chunks,{type:'video/webm'});
+let url=URL.createObjectURL(blob);
+let a=document.createElement('a');
+a.href=url;
+a.download='My-Teleprompter-Video.webm';
+a.click();
+document.getElementById('status').textContent='Video saved. Check Downloads.';
+};
+recorder.start();
+document.getElementById('status').textContent='Recording started';
+}
+
+function stopRecording(){
+if(recorder && recorder.state==='recording'){
+recorder.stop();
+}else{
+alert('Recording abhi start nahi hui hai');
+}
+}
+</script>
+</body>
+</html>
