@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#080b16">
+<title>Teleprompter Camera</title>
+<style>
+:root{--panel:rgba(8,10,20,.72);--white:#f7f3f8;--accent:#1768ff}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#080b16;color:var(--white);font-family:Arial, sans-serif}
+#app{position:fixed;inset:0;background:#080b16}
+#camera{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#171923}
+#camera.mirror{transform:scaleX(-1)}
+#shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.35),transparent 30%,transparent 70%,rgba(0,0,0,.5));pointer-events:none}
+#topbar{position:absolute;top:12px;left:14px;right:14px;display:flex;justify-content:space-between;z-index:5}
+.round{width:54px;height:54px;border:0;border-radius:50%;background:rgba(5,8,22,.82);color:white;font-size:27px;display:grid;place-items:center}
+#scriptPanel{position:absolute;top:12%;left:0;right:0;height:35%;background:rgba(8,9,20,.68);border-top:1px solid rgba(255,255,255,.15);border-bottom:1px solid rgba(255,255,255,.22);z-index:3;overflow:hidden;padding:22px 6.5% 28px}
+#scriptText{font-size:clamp(27px,6.1vw,42px);line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere;color:#f7f2f7;text-align:left}
+#scriptPanel.compact{height:25%}
+#scriptPanel.compact #scriptText{font-size:clamp(22px,5vw,34px)}
+#edgeToggle{position:absolute;right:0;bottom:0;border:0;border-radius:12px 0 0 0;background:#f2eaf5;color:#10121b;font-size:22px;padding:8px 12px;z-index:4}
+#micMeter{position:absolute;left:16px;bottom:27%;height:128px;width:48px;border-radius:28px;background:rgba(0,0,0,.68);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;z-index:4}
+#micMeter span{width:22px;height:7px;border-radius:8px;background:#555}
+#micMeter span:nth-child(-n+2){background:#8ee56c}
+#rotateBtn{position:absolute;left:82px;bottom:27%;width:76px;height:76px;border:0;border-radius:22px;background:rgba(0,0,0,.7);color:white;font-size:30px;z-index:4}
+#dock{position:absolute;left:0;right:0;bottom:0;padding:13px 14px max(18px,env(safe-area-inset-bottom));background:linear-gradient(0deg,rgba(3,5,14,.94),rgba(3,5,14,.72));border-top:1px solid rgba(255,255,255,.25);z-index:6}
+#controls{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1.15fr;gap:9px;align-items:center}
+.tool{height:66px;border:0;border-radius:19px;background:rgba(0,0,0,.7);color:#fff;font-size:26px;display:grid;place-items:center}
+#scrollBtn{background:var(--accent);font-size:30px}
+#recordBtn{background:#f1eaf2;color:#111;font-size:28px}
+#recordBtn.recording{background:#ff4d35;color:white}
+#speedRow{display:flex;align-items:center;gap:10px;margin-top:12px;background:rgba(0,0,0,.52);padding:8px 12px;border-radius:16px}
+#speedRow label{font-size:14px;white-space:nowrap}
+#speed{width:100%;height:34px;accent-color:#8ee56c}
+.speedButton{width:42px;height:42px;border:0;border-radius:12px;background:#252a3a;color:white;font-size:25px}
+#speedValue{min-width:42px;text-align:center;font-weight:bold}
+#status{font-size:12px;text-align:center;color:#d5d5df;margin-top:7px;min-height:15px}
+#settings{position:absolute;inset:0;background:rgba(4,6,15,.96);z-index:10;padding:22px 18px;overflow:auto;display:none}
+#settings.open{display:block}
+#settings h2{margin:6px 0 18px}
+.field{margin:14px 0}
+.field label{display:block;font-size:14px;margin-bottom:7px;color:#d7d8e2}
+input,textarea,select{font:16px Arial;color:#fff;background:#202538;border:1px solid #4a5065;border-radius:10px;padding:11px;width:100%}
+textarea{height:150px;resize:vertical}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.action{border:0;border-radius:12px;padding:13px 16px;background:#1768ff;color:#fff;font-size:16px;font-weight:bold}
+.secondary{background:#30364a}
+#closeSettings{float:right}
+#recordingPreview{position:absolute;inset:0;background:#05070d;z-index:12;display:none;align-items:center;justify-content:center;flex-direction:column;padding:18px}
+#recordingPreview video{width:100%;max-height:72%;background:#000}
+@media(max-height:700px){#scriptPanel{top:9%;height:32%;padding-top:14px}#dock{padding-top:8px} .tool{height:55px}#micMeter,#rotateBtn{bottom:29%}}
+</style>
+</head>
+<body>
+<div id="app">
+  <video id="camera" autoplay playsinline muted></video>
+  <div id="shade"></div>
+  <div id="topbar">
+    <button class="round" id="backBtn" aria-label="Back">‹</button>
+    <button class="round" id="saveScript" aria-label="Save script">▣</button>
+  </div>
+  <section id="scriptPanel"><div id="scriptText">Apni script yahan Settings mein paste karein.</div><button id="edgeToggle">↗</button></section>
+  <div id="micMeter" aria-label="Microphone level"><div>🎙</div><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+  <button id="rotateBtn" title="Switch camera">↻</button>
+  <div id="dock">
+    <div id="controls">
+      <button class="tool" id="settingsBtn" title="Settings">⚙</button>
+      <button class="tool" id="speedJump" title="Speed settings">◉</button>
+      <button class="tool" id="scrollBtn" title="Start scrolling">▶</button>
+      <button class="tool" id="cameraBtn" title="Start camera">▣</button>
+      <button class="tool" id="recordBtn" title="Start recording">●</button>
+    </div>
+    <div id="speedRow">
+      <label for="speed">SPEED</label>
+      <button class="speedButton" id="slower">−</button>
+      <input id="speed" type="range" min="5" max="120" value="35">
+      <button class="speedButton" id="faster">+</button>
+      <span id="speedValue">35</span>
+    </div>
+    <div id="status">Camera band hai — camera button dabayein</div>
+  </div>
+  <section id="settings">
+    <button class="action secondary" id="closeSettings">Close ✕</button>
+    <h2>Teleprompter Settings</h2>
+    <div class="field"><label>Your script</label><textarea id="scriptInput" placeholder="Yahan apni poori script paste karein..."></textarea></div>
+    <div class="two">
+      <div class="field"><label>Text size</label><input id="fontSize" type="range" min="20" max="54" value="36"></div>
+      <div class="field"><label>Text colour</label><input id="textColor" type="color" value="#f7f2f7"></div>
+      <div class="field"><label>Panel colour</label><input id="panelColor" type="color" value="#080914"></div>
+      <div class="field"><label>Panel transparency</label><input id="opacity" type="range" min="20" max="95" value="68"></div>
+    </div>
+    <div class="field"><label>Text alignment</label><select id="alignment"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></div>
+    <div class="field"><label>Recording mode</label><select id="mode"><option value="combined">Camera + script layout video</option><option value="camera">Camera only (script stays on screen)</option></select></div>
+    <div class="two"><button class="action" id="applyScript">Apply & Save Script</button><button class="action secondary" id="flipBtn">Front / Back Camera</button></div>
+    <p style="color:#b9bdcc;font-size:13px;line-height:1.5">Combined recording mein script upar aur camera neeche video mein record hoga. Camera-only mode mein final video mein script nahi aayega. MP4/WebM format browser support par depend karta hai.</p>
+  </section>
+  <section id="recordingPreview">
+    <h3>Last recording</h3><video id="playback" controls playsinline></video>
+    <div class="two" style="width:100%;margin-top:14px"><button class="action" id="downloadBtn">Download video</button><button class="action secondary" id="closePreview">Close</button></div>
+  </section>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+let stream=null, recorder=null, chunks=[], scrollOn=false, raf=0, last=0, offset=0, facing='user', mirror=true, lastUrl=null;
+function status(t){$('status').textContent=t}
+function applyText(){ $('scriptText').textContent=$('scriptInput').value || 'Apni script yahan Settings mein paste karein.'; $('scriptText').style.fontSize=$('fontSize').value+'px'; $('scriptText').style.color=$('textColor').value; $('scriptText').style.textAlign=$('alignment').value; $('scriptPanel').style.background=$('panelColor').value+Math.round(+$('opacity').value*2.55).toString(16).padStart(2,'0'); localStorage.setItem('tp_script',$('scriptInput').value); }
+function loadScript(){ $('scriptInput').value=localStorage.getItem('tp_script')||'Bismillahir Rahmanir Raheem.\n\nYahan apni Naat ya video ki script paste karein.'; applyText(); }
+function tick(t){if(!scrollOn)return;if(last){offset+=(t-last)*(+$('speed').value)/1000;const el=$('scriptText');el.style.transform=`translateY(${-offset}px)`;if(offset>el.scrollHeight+300)offset=-$('scriptPanel').clientHeight;}last=t;raf=requestAnimationFrame(tick)}
+function startScroll(){scrollOn=true;last=0;cancelAnimationFrame(raf);raf=requestAnimationFrame(tick);$('scrollBtn').textContent='Ⅱ';status('Script scrolling chal rahi hai')}
+function stopScroll(){scrollOn=false;cancelAnimationFrame(raf);$('scrollBtn').textContent='▶';status('Scrolling pause hai')}
+async function startCamera(){try{if(stream)stream.getTracks().forEach(t=>t.stop());stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1920},height:{ideal:1080}},audio:true});$('camera').srcObject=stream;$('camera').classList.toggle('mirror',facing==='user'&&mirror);status('Camera ready');}catch(e){status('Camera permission dein aur HTTPS page par kholein');}}
+function switchCamera(){facing=facing==='user'?'environment':'user';startCamera()}
+function mime(){return ['video/mp4;codecs=h264,aac','video/mp4','video/webm;codecs=vp9,opus','video/webm'].find(x=>window.MediaRecorder&&MediaRecorder.isTypeSupported(x))||''}
+function drawCover(ctx,video,x,y,w,h){const vw=video.videoWidth||w,vh=video.videoHeight||h,s=Math.max(w/vw,h/vh),sw=w/s,sh=h/s,sx=(vw-sw)/2,sy=(vh-sh)/2;ctx.save();if(facing==='user'&&mirror){ctx.translate(x+w,y);ctx.scale(-1,1);ctx.drawImage(video,sx,sy,sw,sh,0,0,w,h)}else ctx.drawImage(video,sx,sy,sw,sh,x,y,w,h);ctx.restore()}
+function startRecording(){if(!stream){status('Pehle camera start karein');return}try{chunks=[];let output=stream;if($('mode').value==='combined'){const c=document.createElement('canvas');c.width=1920;c.height=1080;const ctx=c.getContext('2d');let live=true;function paint(){if(!live)return;ctx.fillStyle='#080914';ctx.fillRect(0,0,1920,540);ctx.save();ctx.beginPath();ctx.rect(0,0,1920,540);ctx.clip();ctx.fillStyle=$('textColor').value;ctx.font=`${$('fontSize').value*1.45}px Arial`;ctx.textAlign=$('alignment').value;const lines=$('scriptText').textContent.split('\n');let yy=100-offset%450;lines.forEach(line=>{ctx.fillText(line,$('alignment').value==='left'?80:$('alignment').value==='right'?1840:960,yy,1760);yy+=70});ctx.restore();ctx.fillStyle='#111';ctx.fillRect(0,540,1920,540);if(stream.getVideoTracks().length)drawCover(ctx,$('camera'),0,540,1920,540);requestAnimationFrame(paint)}paint();output=c.captureStream(30);stream.getAudioTracks().forEach(t=>output.addTrack(t));window.stopPaint=()=>{live=false};}
+const type=mime();recorder=new MediaRecorder(output,type?{mimeType:type}:undefined);recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};recorder.onstop=()=>{const blob=new Blob(chunks,{type:recorder.mimeType||'video/webm'});lastUrl=URL.createObjectURL(blob);$('playback').src=lastUrl;$('recordingPreview').style.display='flex';status('Recording save ke liye ready')};recorder.start(500);$('recordBtn').classList.add('recording');$('recordBtn').textContent='■';status('Recording chal rahi hai');}catch(e){status('Recording is browser mein support nahi ho rahi')}}
+function stopRecording(){if(recorder&&recorder.state!=='inactive'){recorder.stop();if(window.stopPaint)window.stopPaint();$('recordBtn').classList.remove('recording');$('recordBtn').textContent='●'}}
+$('settingsBtn').onclick=()=>$('settings').classList.add('open');$('closeSettings').onclick=()=>$('settings').classList.remove('open');$('applyScript').onclick=()=>{applyText();$('scriptText').style.transform='';offset=0;$('settings').classList.remove('open');status('Script save ho gayi')};$('saveScript').onclick=()=>$('settings').classList.add('open');$('cameraBtn').onclick=()=>startCamera();$('rotateBtn').onclick=switchCamera;$('flipBtn').onclick=switchCamera;$('scrollBtn').onclick=()=>scrollOn?stopScroll():startScroll();$('recordBtn').onclick=()=>recorder&&recorder.state==='recording'?stopRecording():startRecording();$('speed').oninput=()=> $('speedValue').textContent=$('speed').value;$('slower').onclick=()=>{$('speed').value=Math.max(5,+$('speed').value-5);$('speed').oninput()};$('faster').onclick=()=>{$('speed').value=Math.min(120,+$('speed').value+5);$('speed').oninput()};$('speedJump').onclick=()=>$('speedRow').scrollIntoView({block:'nearest'});$('edgeToggle').onclick=()=>$('scriptPanel').classList.toggle('compact');$('downloadBtn').onclick=()=>{if(!lastUrl)return;const a=document.createElement('a');a.href=lastUrl;a.download='teleprompter-recording.'+((recorder?.mimeType||'').includes('mp4')?'mp4':'webm');a.click()};$('closePreview').onclick=()=>$('recordingPreview').style.display='none';$('backBtn').onclick=()=>$('settings').classList.add('open');
+loadScript();
+if(location.protocol==='https:')startCamera();
+</script>
+</body></html>
