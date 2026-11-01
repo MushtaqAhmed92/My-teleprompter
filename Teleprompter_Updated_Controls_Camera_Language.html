@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#080b14"><title>My Teleprompter Social - Camera Fix</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font-family:Arial,sans-serif}#app{position:fixed;inset:0;background:#000;overflow:hidden}
+#camera{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;transform:scale(var(--zoom, .75));transform-origin:center center}
+#camera.mirror{transform:scaleX(-1) scale(var(--zoom,.75))}
+#camera{filter:var(--camera-filter,none)}
+#liveCaption{position:absolute;z-index:4;left:5%;right:5%;bottom:30%;padding:8px 10px;background:rgba(0,0,0,.72);color:#fff;text-align:center;font-size:22px;font-weight:800;text-shadow:0 2px 4px #000;border-radius:8px;display:none;pointer-events:none}
+#scriptOverlay{position:absolute;z-index:2;top:0;left:0;width:100%;height:38%;overflow:hidden;background:rgba(0,0,0,.72);color:#fff;padding:18px 22px;font-size:30px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;touch-action:pan-y}
+#scriptText{will-change:transform}.center{text-align:center}.right{text-align:right}
+button{border:0;border-radius:14px;background:#19223a;color:#fff;min-height:44px;padding:9px 11px;font-size:14px;font-weight:600}
+#topbar{position:absolute;z-index:5;top:env(safe-area-inset-top,0);left:0;right:0;display:flex;justify-content:space-between;padding:8px;pointer-events:none}#topbar button{pointer-events:auto}
+#dock{position:absolute;z-index:6;left:8px;right:8px;bottom:calc(7px + env(safe-area-inset-bottom));background:rgba(0,0,0,.70);backdrop-filter:blur(8px);border-radius:17px;padding:7px}#dock button{background:transparent;border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:8px 5px;font-size:13px;min-height:44px}#dock .row{gap:3px}#dock .row button{flex:1}#dock #stopBtn{background:#b51224;border:0;font-weight:800}#dock #recordBtn{color:#ff6464;font-weight:800}#dock #zoomRow,#dock #speedRow{background:rgba(255,255,255,.07);border-radius:10px;margin:6px 0;padding:7px}#dock #status{font-size:11px}
+.row{display:flex;gap:6px;margin:5px 0}.row button{flex:1;min-width:0}
+#speedRow{display:grid;grid-template-columns:auto 34px 1fr 34px auto;gap:5px;align-items:center;padding:5px 2px}#speedRow button{font-size:22px;padding:0}
+#speed,#zoom{width:100%;accent-color:#79e3a0}#zoomRow{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:5px 3px}
+#status{text-align:center;font-size:12px;color:#dce2ef;padding:4px}
+#settings,#result{position:absolute;z-index:10;inset:0;background:#0c1020;overflow:auto;padding:18px 15px calc(24px + env(safe-area-inset-bottom));display:none}
+#settings label{display:block;margin:13px 0 5px;color:#cbd2e5}
+#settings textarea,#settings input,#settings select{width:100%;padding:11px;border-radius:10px;border:1px solid #39415b;background:#171d30;color:#fff;font-size:16px}
+#settings textarea{height:130px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.small{font-size:13px;color:#bbc3d8}
+#result video{width:100%;max-height:70vh;background:#000}#result a{display:inline-block;color:#9bdc91;margin:14px}
+</style></head><body><div id="app"><video id="camera" autoplay playsinline muted></video><div id="scriptOverlay"><div id="scriptText">Settings mein apni script paste karein.</div></div><div id="liveCaption"></div><div id="recordBadge" style="display:none;position:absolute;z-index:7;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));background:rgba(0,0,0,.65);padding:7px 11px;border-radius:20px;font-size:13px;pointer-events:none">🔴 REC</div>
+<div id="topbar"><button id="settingsBtn" data-i18n="settings">⚙ Settings</button><button id="fullBtn" data-i18n="fullscreen">⛶ Full screen</button></div>
+<div id="dock"><div class="row"><button id="cameraBtn" data-i18n="camera">📷 Camera</button><button id="flipBtn" data-i18n="flip">↻ Flip</button><button id="scrollBtn" data-i18n="scroll">▶ Start Scroll</button><button id="recordBtn" data-i18n="record">● Record</button></div><div class="row" style="display:none"><button id="speechTestBtn" type="button">🎙 Test Captions (mic only)</button></div>
+<div id="zoomRow"><b data-i18n="zoom">Zoom</b><input id="zoom" type="range" min="0.45" max="2" step="0.05" value="0.75"><b id="zoomNum">0.75×</b></div>
+<div id="speedRow"><b data-i18n="speed">Speed</b><button id="minus">−</button><input id="speed" type="range" min="5" max="100" value="35"><button id="plus">+</button><b id="speedNum">35</b></div>
+<div class="row"><button id="resetBtn" data-i18n="reset">↺ Reset</button><button id="stopBtn" data-i18n="stopSave">■ Stop & Save</button><button id="hideBtn" data-i18n="hide">⌄ Hide</button></div><div id="status">Camera start karein. Script Settings mein paste karein.</div></div>
+<div id="settings"><h2 data-i18n="settingsTitle">Teleprompter Settings</h2><label data-i18n="appLanguageLabel">App language</label><select id="appLanguage"><option value="en">English</option><option value="hi">हिन्दी</option><option value="kn">ಕನ್ನಡ</option><option value="ur">اردو</option><option value="mr">मराठी</option><option value="ta">தமிழ்</option><option value="te">తెలుగు</option><option value="ml">മലയാളം</option><option value="bn">বাংলা</option><option value="gu">ગુજરાતી</option><option value="pa">ਪੰਜਾਬੀ</option><option value="or">ଓଡ଼ିଆ</option><option value="as">অসমীয়া</option><option value="ar">العربية</option><option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="pt">Português</option><option value="zh">中文</option><option value="ja">日本語</option><option value="id">Bahasa Indonesia</option><option value="tr">Türkçe</option></select><label data-i18n="pasteScript">Script paste karein</label><textarea id="scriptInput" placeholder="Yahan apni script paste karein" data-i18n-placeholder="scriptPlaceholder"></textarea><div class="grid"><button id="saveBtn" data-i18n="saveScript">Save Script</button><button id="doneBtn" data-i18n="done">Done</button></div>
+<label data-i18n="textSize">Text size (aapka current size same rahega)</label><input id="fontSize" type="range" min="18" max="48" value="30">
+<label data-i18n="panelHeight">Script panel height</label><input id="panelHeight" type="range" min="20" max="60" value="38">
+<div class="grid"><div><label data-i18n="textColour">Text colour</label><input id="textColor" type="color" value="#ffffff"></div><div><label data-i18n="panelColour">Panel colour</label><input id="bgColor" type="color" value="#000000"></div></div>
+<label data-i18n="scriptBackground">Script background</label><div class="grid"><button id="bgToggle" data-i18n="backgroundOn">Background: ON</button><span class="small" style="align-self:center">Opacity: <b id="opacityNum">82%</b></span></div><input id="bgOpacity" type="range" min="0" max="100" value="82">
+<label data-i18n="textStyle">Ready-made text style</label><select id="fontStyle"><option value="bold">Modern Bold</option><option value="clean">Clean Modern</option><option value="elegant">Elegant Serif</option><option value="neon">Neon Glow</option><option value="gradient">Colour Gradient</option><option value="shadow">Cinematic Shadow</option></select>
+<div class="grid"><button id="presetWhite">White + Dark</button><button id="presetGold">Gold + Black</button><button id="presetPink">Pink + Purple</button><button id="presetCyan">Cyan + Navy</button></div>
+<label data-i18n="alignment">Alignment</label><select id="alignment"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select>
+<label data-i18n="cameraFilter">Camera filter</label><select id="cameraFilter"><option value="natural">Natural HD</option><option value="beauty">Soft Beauty</option><option value="cinematic">Cinematic</option><option value="warm">Warm Glow</option><option value="cool">Cool Tone</option><option value="bw">Black &amp; White</option></select>
+<label data-i18n="voiceEnhancement">Voice enhancement</label><select id="voiceMode"><option value="clear">Clear Voice (recommended)</option><option value="natural">Natural Voice</option></select>
+<p class="small">Filters recording mein bhi apply honge. Voice enhancement halki noise filtering, low rumble cut aur volume balance use karta hai. Asli camera clarity roshni aur phone lens par depend karti hai.</p>
+<label data-i18n="videoFormat">Video format</label><select id="format"><option value="portrait">Vertical 9:16 (Shorts / Reels)</option><option value="landscape">Landscape 16:9 (YouTube)</option></select>
+<div class="grid"><button id="frontBtn" data-i18n="frontCamera">Front camera</button><button id="backBtn" data-i18n="backCamera">Back camera</button></div>
+<p class="small">Camera ab full frame dikhayega. Zoom live preview aur saved recording dono par kaam karega. Recording WebM ho sakti hai; agar Samsung Gallery audio na chalaye to VLC player mein test karein.</p></div>
+<div id="result"><h2 data-i18n="recordingReady">Recording ready</h2><video id="playback" controls playsinline></video><p><a id="download" download="teleprompter-social.webm">Download video</a></p><button id="closeResult" data-i18n="back">Back</button></div></div>
+<script>
+
+const UI_TEXT = {
+en:{
+settingsTitle:"Teleprompter Settings",appLanguageLabel:"App language",settings:"⚙ Settings",fullscreen:"⛶ Full screen",
+camera:"📷 Camera",flip:"↻ Flip",scroll:"▶ Scroll",pause:"Ⅱ Pause",record:"● Record",zoom:"Zoom",speed:"Speed",
+reset:"↺ Reset",stopSave:"■ Stop & Save",hide:"⌄ Hide",pasteScript:"Paste your script",scriptPlaceholder:"Paste your script here",
+saveScript:"Save Script",done:"Done",textSize:"Text size (your current size will remain the same)",panelHeight:"Script panel height",
+textColour:"Text colour",panelColour:"Panel colour",scriptBackground:"Script background",backgroundOn:"Background: ON",
+backgroundOff:"Background: OFF",textStyle:"Ready-made text style",alignment:"Alignment",cameraFilter:"Camera filter",
+voiceEnhancement:"Voice enhancement",videoFormat:"Video format",frontCamera:"Front camera",backCamera:"Back camera",
+recordingReady:"Recording ready",back:"Back",left:"Left",center:"Center",right:"Right"
+},
+hi:{
+settingsTitle:"टेलीप्रॉम्प्टर सेटिंग्स",appLanguageLabel:"ऐप की भाषा",settings:"⚙ सेटिंग्स",fullscreen:"⛶ फुल स्क्रीन",
+camera:"📷 कैमरा",flip:"↻ कैमरा पलटें",scroll:"▶ स्क्रॉल शुरू",pause:"Ⅱ रोकें",record:"● रिकॉर्ड",
+zoom:"ज़ूम",speed:"गति",reset:"↺ रीसेट",stopSave:"■ रोकें और सेव करें",hide:"⌄ छुपाएँ",
+pasteScript:"अपनी स्क्रिप्ट यहाँ डालें",scriptPlaceholder:"अपनी स्क्रिप्ट यहाँ पेस्ट करें",saveScript:"स्क्रिप्ट सेव करें",
+done:"हो गया",textSize:"टेक्स्ट का आकार (मौजूदा आकार वैसा ही रहेगा)",panelHeight:"स्क्रिप्ट पैनल की ऊँचाई",
+textColour:"टेक्स्ट का रंग",panelColour:"पैनल का रंग",scriptBackground:"स्क्रिप्ट का बैकग्राउंड",
+backgroundOn:"बैकग्राउंड: चालू",backgroundOff:"बैकग्राउंड: बंद",textStyle:"तैयार टेक्स्ट स्टाइल",
+alignment:"टेक्स्ट की जगह",cameraFilter:"कैमरा फ़िल्टर",voiceEnhancement:"आवाज़ बेहतर करें",videoFormat:"वीडियो फ़ॉर्मेट",
+frontCamera:"फ्रंट कैमरा",backCamera:"बैक कैमरा",recordingReady:"रिकॉर्डिंग तैयार",back:"वापस",
+left:"बाएँ",center:"बीच में",right:"दाएँ"
+},
+kn:{
+settingsTitle:"ಟೆಲಿಪ್ರಾಂಪ್ಟರ್ ಸೆಟ್ಟಿಂಗ್‌ಗಳು",appLanguageLabel:"ಆ್ಯಪ್ ಭಾಷೆ",settings:"⚙ ಸೆಟ್ಟಿಂಗ್‌ಗಳು",fullscreen:"⛶ ಪೂರ್ಣ ಪರದೆ",
+camera:"📷 ಕ್ಯಾಮೆರಾ",flip:"↻ ತಿರುಗಿಸಿ",scroll:"▶ ಸ್ಕ್ರಾಲ್ ಪ್ರಾರಂಭಿಸಿ",pause:"Ⅱ ವಿರಾಮ",record:"● ರೆಕಾರ್ಡ್",
+zoom:"ಜೂಮ್",speed:"ವೇಗ",reset:"↺ ಮರುಹೊಂದಿಸಿ",stopSave:"■ ನಿಲ್ಲಿಸಿ ಮತ್ತು ಉಳಿಸಿ",hide:"⌄ ಮರೆಮಾಡಿ",
+pasteScript:"ನಿಮ್ಮ ಸ್ಕ್ರಿಪ್ಟ್ ಅಂಟಿಸಿ",scriptPlaceholder:"ನಿಮ್ಮ ಸ್ಕ್ರಿಪ್ಟ್ ಅನ್ನು ಇಲ್ಲಿ ಅಂಟಿಸಿ",saveScript:"ಸ್ಕ್ರಿಪ್ಟ್ ಉಳಿಸಿ",
+done:"ಮುಗಿದಿದೆ",textSize:"ಅಕ್ಷರದ ಗಾತ್ರ (ಈಗಿನ ಗಾತ್ರ ಹಾಗೆಯೇ ಇರುತ್ತದೆ)",panelHeight:"ಸ್ಕ್ರಿಪ್ಟ್ ಪ್ಯಾನೆಲ್ ಎತ್ತರ",
+textColour:"ಅಕ್ಷರದ ಬಣ್ಣ",panelColour:"ಪ್ಯಾನೆಲ್ ಬಣ್ಣ",scriptBackground:"ಸ್ಕ್ರಿಪ್ಟ್ ಹಿನ್ನೆಲೆ",
+backgroundOn:"ಹಿನ್ನೆಲೆ: ಆನ್",backgroundOff:"ಹಿನ್ನೆಲೆ: ಆಫ್",textStyle:"ಸಿದ್ಧ ಪಠ್ಯ ಶೈಲಿ",
+alignment:"ಜೋಡಣೆ",cameraFilter:"ಕ್ಯಾಮೆರಾ ಫಿಲ್ಟರ್",voiceEnhancement:"ಧ್ವನಿ ಸುಧಾರಣೆ",videoFormat:"ವೀಡಿಯೊ ಸ್ವರೂಪ",
+frontCamera:"ಮುಂಭಾಗದ ಕ್ಯಾಮೆರಾ",backCamera:"ಹಿಂಭಾಗದ ಕ್ಯಾಮೆರಾ",recordingReady:"ರೆಕಾರ್ಡಿಂಗ್ ಸಿದ್ಧವಾಗಿದೆ",back:"ಹಿಂದೆ",
+left:"ಎಡ",center:"ಮಧ್ಯ",right:"ಬಲ"
+}};
+
+const EXTRA_TEXT={
+ur:{settingsTitle:"ٹیلی پرامپٹر سیٹنگز",appLanguageLabel:"ایپ کی زبان",settings:"⚙ سیٹنگز",fullscreen:"⛶ فل اسکرین",camera:"📷 کیمرہ",flip:"↻ پلٹیں",scroll:"▶ اسکرول شروع",pause:"Ⅱ روکیں",record:"● ریکارڈ",zoom:"زوم",speed:"رفتار",reset:"↺ ری سیٹ",stopSave:"■ روکیں اور محفوظ کریں",hide:"⌄ چھپائیں",pasteScript:"اپنا اسکرپٹ یہاں ڈالیں",scriptPlaceholder:"اپنا اسکرپٹ یہاں پیسٹ کریں",saveScript:"اسکرپٹ محفوظ کریں",done:"ہو گیا",textSize:"متن کا سائز",panelHeight:"اسکرپٹ پینل کی اونچائی",textColour:"متن کا رنگ",panelColour:"پینل کا رنگ",scriptBackground:"اسکرپٹ کا پس منظر",backgroundOn:"پس منظر: آن",backgroundOff:"پس منظر: آف",alignment:"ترتیب",cameraFilter:"کیمرہ فلٹر",voiceEnhancement:"آواز بہتر کریں",videoFormat:"ویڈیو فارمیٹ",frontCamera:"سامنے کا کیمرہ",backCamera:"پیچھے کا کیمرہ",recordingReady:"ریکارڈنگ تیار",back:"واپس"},
+mr:{settingsTitle:"टेलिप्रॉम्प्टर सेटिंग्ज",appLanguageLabel:"अॅपची भाषा",settings:"⚙ सेटिंग्ज",fullscreen:"⛶ पूर्ण स्क्रीन",camera:"📷 कॅमेरा",flip:"↻ फिरवा",scroll:"▶ स्क्रोल सुरू करा",pause:"Ⅱ थांबवा",record:"● रेकॉर्ड",zoom:"झूम",speed:"वेग",reset:"↺ रीसेट",stopSave:"■ थांबवा आणि सेव्ह करा",hide:"⌄ लपवा",pasteScript:"तुमची स्क्रिप्ट येथे टाका",scriptPlaceholder:"तुमची स्क्रिप्ट येथे पेस्ट करा",saveScript:"स्क्रिप्ट सेव्ह करा",done:"झाले",textSize:"मजकुराचा आकार",panelHeight:"स्क्रिप्ट पॅनेलची उंची",textColour:"मजकुराचा रंग",panelColour:"पॅनेलचा रंग",scriptBackground:"स्क्रिप्टची पार्श्वभूमी",backgroundOn:"पार्श्वभूमी: सुरू",backgroundOff:"पार्श्वभूमी: बंद",alignment:"मांडणी",cameraFilter:"कॅमेरा फिल्टर",voiceEnhancement:"आवाज सुधारा",videoFormat:"व्हिडिओ फॉरमॅट",frontCamera:"समोरील कॅमेरा",backCamera:"मागील कॅमेरा",recordingReady:"रेकॉर्डिंग तयार",back:"मागे"},
+ta:{settingsTitle:"டெலிப்ராம்ப்டர் அமைப்புகள்",appLanguageLabel:"செயலி மொழி",settings:"⚙ அமைப்புகள்",fullscreen:"⛶ முழுத்திரை",camera:"📷 கேமரா",flip:"↻ திருப்பு",scroll:"▶ உருட்டத் தொடங்கு",pause:"Ⅱ நிறுத்து",record:"● பதிவு",zoom:"பெரிதாக்கு",speed:"வேகம்",reset:"↺ மீட்டமை",stopSave:"■ நிறுத்தி சேமி",hide:"⌄ மறை",pasteScript:"உங்கள் உரையை இங்கே ஒட்டவும்",scriptPlaceholder:"உங்கள் உரையை இங்கே ஒட்டவும்",saveScript:"உரையை சேமி",done:"முடிந்தது",textSize:"உரை அளவு",panelHeight:"உரைப் பலகை உயரம்",textColour:"உரை நிறம்",panelColour:"பலகை நிறம்",scriptBackground:"உரைப் பின்னணி",backgroundOn:"பின்னணி: இயக்கு",backgroundOff:"பின்னணி: அணை",alignment:"சீரமைப்பு",cameraFilter:"கேமரா வடிகட்டி",voiceEnhancement:"குரல் மேம்பாடு",videoFormat:"வீடியோ வடிவம்",frontCamera:"முன் கேமரா",backCamera:"பின் கேமரா",recordingReady:"பதிவு தயார்",back:"பின்"},
+te:{settingsTitle:"టెలిప్రాంప్టర్ సెట్టింగులు",appLanguageLabel:"యాప్ భాష",settings:"⚙ సెట్టింగులు",fullscreen:"⛶ పూర్తి తెర",camera:"📷 కెమెరా",flip:"↻ తిప్పండి",scroll:"▶ స్క్రోల్ ప్రారంభించండి",pause:"Ⅱ ఆపండి",record:"● రికార్డ్",zoom:"జూమ్",speed:"వేగం",reset:"↺ రీసెట్",stopSave:"■ ఆపి సేవ్ చేయండి",hide:"⌄ దాచండి",pasteScript:"మీ స్క్రిప్ట్ ఇక్కడ పెట్టండి",scriptPlaceholder:"మీ స్క్రిప్ట్ ఇక్కడ పేస్ట్ చేయండి",saveScript:"స్క్రిప్ట్ సేవ్ చేయండి",done:"పూర్తయింది",textSize:"అక్షరాల పరిమాణం",panelHeight:"స్క్రిప్ట్ ప్యానెల్ ఎత్తు",textColour:"అక్షరాల రంగు",panelColour:"ప్యానెల్ రంగు",scriptBackground:"స్క్రిప్ట్ నేపథ్యం",backgroundOn:"నేపథ్యం: ఆన్",backgroundOff:"నేపథ్యం: ఆఫ్",alignment:"అమరిక",cameraFilter:"కెమెరా ఫిల్టర్",voiceEnhancement:"వాయిస్ మెరుగుదల",videoFormat:"వీడియో ఫార్మాట్",frontCamera:"ముందు కెమెరా",backCamera:"వెనుక కెమెరా",recordingReady:"రికార్డింగ్ సిద్ధం",back:"వెనక్కి"},
+ml:{settingsTitle:"ടെലിപ്രോംപ്റ്റർ ക്രമീകരണങ്ങൾ",appLanguageLabel:"ആപ്പ് ഭാഷ",settings:"⚙ ക്രമീകരണങ്ങൾ",fullscreen:"⛶ പൂർണ്ണ സ്ക്രീൻ",camera:"📷 ക്യാമറ",flip:"↻ തിരിക്കുക",scroll:"▶ സ്ക്രോൾ തുടങ്ങുക",pause:"Ⅱ നിർത്തുക",record:"● റെക്കോർഡ്",zoom:"സൂം",speed:"വേഗം",reset:"↺ പുനഃസജ്ജമാക്കുക",stopSave:"■ നിർത്തി സംരക്ഷിക്കുക",hide:"⌄ മറയ്ക്കുക",pasteScript:"സ്ക്രിപ്റ്റ് ഇവിടെ ചേർക്കുക",scriptPlaceholder:"സ്ക്രിപ്റ്റ് ഇവിടെ പേസ്റ്റ് ചെയ്യുക",saveScript:"സ്ക്രിപ്റ്റ് സംരക്ഷിക്കുക",done:"കഴിഞ്ഞു",textSize:"അക്ഷര വലുപ്പം",panelHeight:"സ്ക്രിപ്റ്റ് പാനൽ ഉയരം",textColour:"അക്ഷര നിറം",panelColour:"പാനൽ നിറം",scriptBackground:"സ്ക്രിപ്റ്റ് പശ്ചാത്തലം",backgroundOn:"പശ്ചാത്തലം: ഓൺ",backgroundOff:"പശ്ചാത്തലം: ഓഫ്",alignment:"ക്രമീകരണം",cameraFilter:"ക്യാമറ ഫിൽട്ടർ",voiceEnhancement:"ശബ്ദ മെച്ചപ്പെടുത്തൽ",videoFormat:"വീഡിയോ ഫോർമാറ്റ്",frontCamera:"മുൻ ക്യാമറ",backCamera:"പിൻ ക്യാമറ",recordingReady:"റെക്കോർഡിംഗ് തയ്യാറാണ്",back:"തിരികെ"},
+ bn:{settingsTitle:"টেলিপ্রম্পটার সেটিংস",appLanguageLabel:"অ্যাপের ভাষা",settings:"⚙ সেটিংস",fullscreen:"⛶ পূর্ণ পর্দা",camera:"📷 ক্যামেরা",flip:"↻ ঘোরান",scroll:"▶ স্ক্রল শুরু",pause:"Ⅱ থামান",record:"● রেকর্ড",zoom:"জুম",speed:"গতি",reset:"↺ রিসেট",stopSave:"■ থামিয়ে সংরক্ষণ",hide:"⌄ লুকান",pasteScript:"আপনার স্ক্রিপ্ট এখানে দিন",scriptPlaceholder:"এখানে স্ক্রিপ্ট পেস্ট করুন",saveScript:"স্ক্রিপ্ট সংরক্ষণ",done:"সম্পন্ন",textSize:"লেখার আকার",panelHeight:"স্ক্রিপ্ট প্যানেলের উচ্চতা",textColour:"লেখার রং",panelColour:"প্যানেলের রং",scriptBackground:"স্ক্রিপ্টের পটভূমি",backgroundOn:"পটভূমি: চালু",backgroundOff:"পটভূমি: বন্ধ",alignment:"সজ্জা",cameraFilter:"ক্যামেরা ফিল্টার",voiceEnhancement:"কণ্ঠ উন্নত করুন",videoFormat:"ভিডিও ফরম্যাট",frontCamera:"সামনের ক্যামেরা",backCamera:"পেছনের ক্যামেরা",recordingReady:"রেকর্ডিং প্রস্তুত",back:"ফিরে যান"},
+ gu:{settingsTitle:"ટેલિપ્રોમ્પ્ટર સેટિંગ્સ",appLanguageLabel:"એપની ભાષા",settings:"⚙ સેટિંગ્સ",fullscreen:"⛶ પૂર્ણ સ્ક્રીન",camera:"📷 કેમેરા",flip:"↻ ફેરવો",scroll:"▶ સ્ક્રોલ શરૂ કરો",pause:"Ⅱ રોકો",record:"● રેકોર્ડ",zoom:"ઝૂમ",speed:"ઝડપ",reset:"↺ રીસેટ",stopSave:"■ રોકો અને સાચવો",hide:"⌄ છુપાવો",pasteScript:"તમારી સ્ક્રિપ્ટ અહીં મૂકો",scriptPlaceholder:"અહીં સ્ક્રિપ્ટ પેસ્ટ કરો",saveScript:"સ્ક્રિપ્ટ સાચવો",done:"થઈ ગયું",textSize:"લખાણનું કદ",panelHeight:"સ્ક્રિપ્ટ પેનલની ઊંચાઈ",textColour:"લખાણનો રંગ",panelColour:"પેનલનો રંગ",scriptBackground:"સ્ક્રિપ્ટની પૃષ્ઠભૂમિ",backgroundOn:"પૃષ્ઠભૂમિ: ચાલુ",backgroundOff:"પૃષ્ઠભૂમિ: બંધ",alignment:"ગોઠવણી",cameraFilter:"કેમેરા ફિલ્ટર",voiceEnhancement:"અવાજ સુધારો",videoFormat:"વિડિયો ફોર્મેટ",frontCamera:"આગળનો કેમેરો",backCamera:"પાછળનો કેમેરો",recordingReady:"રેકોર્ડિંગ તૈયાર",back:"પાછા"},
+ pa:{settingsTitle:"ਟੈਲੀਪ੍ਰੋਂਪਟਰ ਸੈਟਿੰਗਾਂ",appLanguageLabel:"ਐਪ ਦੀ ਭਾਸ਼ਾ",settings:"⚙ ਸੈਟਿੰਗਾਂ",fullscreen:"⛶ ਪੂਰੀ ਸਕ੍ਰੀਨ",camera:"📷 ਕੈਮਰਾ",flip:"↻ ਘੁਮਾਓ",scroll:"▶ ਸਕ੍ਰੋਲ ਸ਼ੁਰੂ ਕਰੋ",pause:"Ⅱ ਰੋਕੋ",record:"● ਰਿਕਾਰਡ",zoom:"ਜ਼ੂਮ",speed:"ਗਤੀ",reset:"↺ ਰੀਸੈੱਟ",stopSave:"■ ਰੋਕੋ ਅਤੇ ਸੰਭਾਲੋ",hide:"⌄ ਲੁਕਾਓ",pasteScript:"ਆਪਣੀ ਸਕ੍ਰਿਪਟ ਇੱਥੇ ਪਾਓ",scriptPlaceholder:"ਇੱਥੇ ਸਕ੍ਰਿਪਟ ਪੇਸਟ ਕਰੋ",saveScript:"ਸਕ੍ਰਿਪਟ ਸੰਭਾਲੋ",done:"ਹੋ ਗਿਆ",textSize:"ਲਿਖਤ ਦਾ ਆਕਾਰ",panelHeight:"ਸਕ੍ਰਿਪਟ ਪੈਨਲ ਦੀ ਉਚਾਈ",textColour:"ਲਿਖਤ ਦਾ ਰੰਗ",panelColour:"ਪੈਨਲ ਦਾ ਰੰਗ",scriptBackground:"ਸਕ੍ਰਿਪਟ ਦਾ ਪਿਛੋਕੜ",backgroundOn:"ਪਿਛੋਕੜ: ਚਾਲੂ",backgroundOff:"ਪਿਛੋਕੜ: ਬੰਦ",alignment:"ਤਰਤੀਬ",cameraFilter:"ਕੈਮਰਾ ਫਿਲਟਰ",voiceEnhancement:"ਆਵਾਜ਼ ਸੁਧਾਰੋ",videoFormat:"ਵੀਡੀਓ ਫਾਰਮੈਟ",frontCamera:"ਅੱਗੇ ਵਾਲਾ ਕੈਮਰਾ",backCamera:"ਪਿੱਛੇ ਵਾਲਾ ਕੈਮਰਾ",recordingReady:"ਰਿਕਾਰਡਿੰਗ ਤਿਆਰ",back:"ਵਾਪਸ"},
+ or:{settingsTitle:"ଟେଲିପ୍ରମ୍ପଟର ସେଟିଂସ୍",appLanguageLabel:"ଆପ୍ ଭାଷା",settings:"⚙ ସେଟିଂସ୍",fullscreen:"⛶ ପୂର୍ଣ୍ଣ ସ୍କ୍ରିନ୍",camera:"📷 କ୍ୟାମେରା",flip:"↻ ଘୁଞ୍ଚାନ୍ତୁ",scroll:"▶ ସ୍କ୍ରୋଲ୍ ଆରମ୍ଭ",pause:"Ⅱ ବନ୍ଦ",record:"● ରେକର୍ଡ",zoom:"ଜୁମ୍",speed:"ଗତି",reset:"↺ ପୁନଃସେଟ୍",stopSave:"■ ବନ୍ଦ କରି ସେଭ୍",hide:"⌄ ଲୁଚାନ୍ତୁ",pasteScript:"ଆପଣଙ୍କ ସ୍କ୍ରିପ୍ଟ ଏଠାରେ ଦିଅନ୍ତୁ",scriptPlaceholder:"ଏଠାରେ ସ୍କ୍ରିପ୍ଟ ପେଷ୍ଟ କରନ୍ତୁ",saveScript:"ସ୍କ୍ରିପ୍ଟ ସେଭ୍",done:"ହୋଇଗଲା",textSize:"ଟେକ୍ସଟ୍ ଆକାର",panelHeight:"ସ୍କ୍ରିପ୍ଟ ପ୍ୟାନେଲ୍ ଉଚ୍ଚତା",textColour:"ଟେକ୍ସଟ୍ ରଙ୍ଗ",panelColour:"ପ୍ୟାନେଲ୍ ରଙ୍ଗ",scriptBackground:"ସ୍କ୍ରିପ୍ଟ ପୃଷ୍ଠଭୂମି",backgroundOn:"ପୃଷ୍ଠଭୂମି: ଅନ୍",backgroundOff:"ପୃଷ୍ଠଭୂମି: ଅଫ୍",alignment:"ସଜାଣି",cameraFilter:"କ୍ୟାମେରା ଫିଲ୍ଟର୍",voiceEnhancement:"ସ୍ୱର ଉନ୍ନତି",videoFormat:"ଭିଡିଓ ଫର୍ମାଟ୍",frontCamera:"ସାମ୍ନା କ୍ୟାମେରା",backCamera:"ପଛ କ୍ୟାମେରା",recordingReady:"ରେକର୍ଡିଂ ପ୍ରସ୍ତୁତ",back:"ପଛକୁ"},
+ as:{settingsTitle:"টেলিপ্ৰম্পটাৰ ছেটিংছ",appLanguageLabel:"এপৰ ভাষা",settings:"⚙ ছেটিংছ",fullscreen:"⛶ পূৰ্ণ পৰ্দা",camera:"📷 কেমেৰা",flip:"↻ ঘূৰাওক",scroll:"▶ স্ক্ৰল আৰম্ভ",pause:"Ⅱ ৰখাওক",record:"● ৰেকৰ্ড",zoom:"জুম",speed:"গতি",reset:"↺ ৰিছেট",stopSave:"■ ৰখাই সংৰক্ষণ",hide:"⌄ লুকুৱাওক",pasteScript:"আপোনাৰ স্ক্ৰিপ্ট ইয়াত দিয়ক",scriptPlaceholder:"ইয়াত স্ক্ৰিপ্ট পেষ্ট কৰক",saveScript:"স্ক্ৰিপ্ট সংৰক্ষণ",done:"হ'ল",textSize:"লিখাৰ আকাৰ",panelHeight:"স্ক্ৰিপ্ট পেনেলৰ উচ্চতা",textColour:"লিখাৰ ৰং",panelColour:"পেনেলৰ ৰং",scriptBackground:"স্ক্ৰিপ্টৰ পটভূমি",backgroundOn:"পটভূমি: অন",backgroundOff:"পটভূমি: অফ",alignment:"সজ্জা",cameraFilter:"কেমেৰা ফিল্টাৰ",voiceEnhancement:"কণ্ঠ উন্নত কৰক",videoFormat:"ভিডিঅ' ফৰ্মেট",frontCamera:"সন্মুখৰ কেমেৰা",backCamera:"পিছফালৰ কেমেৰা",recordingReady:"ৰেকৰ্ডিং সাজু",back:"উভতি যাওক"},
+ ar:{settingsTitle:"إعدادات جهاز التلقين",appLanguageLabel:"لغة التطبيق",settings:"⚙ الإعدادات",fullscreen:"⛶ ملء الشاشة",camera:"📷 الكاميرا",flip:"↻ قلب",scroll:"▶ بدء التمرير",pause:"Ⅱ إيقاف مؤقت",record:"● تسجيل",zoom:"تكبير",speed:"السرعة",reset:"↺ إعادة ضبط",stopSave:"■ إيقاف وحفظ",hide:"⌄ إخفاء",pasteScript:"ألصق النص هنا",scriptPlaceholder:"ألصق النص هنا",saveScript:"حفظ النص",done:"تم",textSize:"حجم النص",panelHeight:"ارتفاع لوحة النص",textColour:"لون النص",panelColour:"لون اللوحة",scriptBackground:"خلفية النص",backgroundOn:"الخلفية: تشغيل",backgroundOff:"الخلفية: إيقاف",alignment:"المحاذاة",cameraFilter:"مرشح الكاميرا",voiceEnhancement:"تحسين الصوت",videoFormat:"تنسيق الفيديو",frontCamera:"الكاميرا الأمامية",backCamera:"الكاميرا الخلفية",recordingReady:"التسجيل جاهز",back:"رجوع"},
+ es:{settingsTitle:"Configuración del teleprompter",appLanguageLabel:"Idioma de la aplicación",settings:"⚙ Ajustes",fullscreen:"⛶ Pantalla completa",camera:"📷 Cámara",flip:"↻ Girar",scroll:"▶ Iniciar desplazamiento",pause:"Ⅱ Pausar",record:"● Grabar",zoom:"Zoom",speed:"Velocidad",reset:"↺ Restablecer",stopSave:"■ Detener y guardar",hide:"⌄ Ocultar",pasteScript:"Pega tu guion aquí",scriptPlaceholder:"Pega tu guion aquí",saveScript:"Guardar guion",done:"Listo",textSize:"Tamaño del texto",panelHeight:"Altura del panel",textColour:"Color del texto",panelColour:"Color del panel",scriptBackground:"Fondo del guion",backgroundOn:"Fondo: activado",backgroundOff:"Fondo: desactivado",alignment:"Alineación",cameraFilter:"Filtro de cámara",voiceEnhancement:"Mejora de voz",videoFormat:"Formato de vídeo",frontCamera:"Cámara frontal",backCamera:"Cámara trasera",recordingReady:"Grabación lista",back:"Volver"},
+ fr:{settingsTitle:"Paramètres du téléprompteur",appLanguageLabel:"Langue de l’application",settings:"⚙ Paramètres",fullscreen:"⛶ Plein écran",camera:"📷 Caméra",flip:"↻ Retourner",scroll:"▶ Démarrer le défilement",pause:"Ⅱ Pause",record:"● Enregistrer",zoom:"Zoom",speed:"Vitesse",reset:"↺ Réinitialiser",stopSave:"■ Arrêter et enregistrer",hide:"⌄ Masquer",pasteScript:"Collez votre texte ici",scriptPlaceholder:"Collez votre texte ici",saveScript:"Enregistrer le texte",done:"Terminé",textSize:"Taille du texte",panelHeight:"Hauteur du panneau",textColour:"Couleur du texte",panelColour:"Couleur du panneau",scriptBackground:"Arrière-plan du texte",backgroundOn:"Arrière-plan : activé",backgroundOff:"Arrière-plan : désactivé",alignment:"Alignement",cameraFilter:"Filtre caméra",voiceEnhancement:"Amélioration de la voix",videoFormat:"Format vidéo",frontCamera:"Caméra avant",backCamera:"Caméra arrière",recordingReady:"Enregistrement prêt",back:"Retour"},
+ de:{settingsTitle:"Teleprompter-Einstellungen",appLanguageLabel:"App-Sprache",settings:"⚙ Einstellungen",fullscreen:"⛶ Vollbild",camera:"📷 Kamera",flip:"↻ Drehen",scroll:"▶ Scrollen starten",pause:"Ⅱ Pause",record:"● Aufnehmen",zoom:"Zoom",speed:"Geschwindigkeit",reset:"↺ Zurücksetzen",stopSave:"■ Stoppen und speichern",hide:"⌄ Ausblenden",pasteScript:"Text hier einfügen",scriptPlaceholder:"Text hier einfügen",saveScript:"Text speichern",done:"Fertig",textSize:"Textgröße",panelHeight:"Panelhöhe",textColour:"Textfarbe",panelColour:"Panelfarbe",scriptBackground:"Texthintergrund",backgroundOn:"Hintergrund: Ein",backgroundOff:"Hintergrund: Aus",alignment:"Ausrichtung",cameraFilter:"Kamerafilter",voiceEnhancement:"Stimmverbesserung",videoFormat:"Videoformat",frontCamera:"Frontkamera",backCamera:"Rückkamera",recordingReady:"Aufnahme bereit",back:"Zurück"},
+ pt:{settingsTitle:"Configurações do teleprompter",appLanguageLabel:"Idioma do aplicativo",settings:"⚙ Configurações",fullscreen:"⛶ Tela cheia",camera:"📷 Câmera",flip:"↻ Virar",scroll:"▶ Iniciar rolagem",pause:"Ⅱ Pausar",record:"● Gravar",zoom:"Zoom",speed:"Velocidade",reset:"↺ Redefinir",stopSave:"■ Parar e salvar",hide:"⌄ Ocultar",pasteScript:"Cole seu roteiro aqui",scriptPlaceholder:"Cole seu roteiro aqui",saveScript:"Salvar roteiro",done:"Concluído",textSize:"Tamanho do texto",panelHeight:"Altura do painel",textColour:"Cor do texto",panelColour:"Cor do painel",scriptBackground:"Fundo do roteiro",backgroundOn:"Fundo: ligado",backgroundOff:"Fundo: desligado",alignment:"Alinhamento",cameraFilter:"Filtro da câmera",voiceEnhancement:"Melhoria de voz",videoFormat:"Formato de vídeo",frontCamera:"Câmera frontal",backCamera:"Câmera traseira",recordingReady:"Gravação pronta",back:"Voltar"},
+ id:{settingsTitle:"Pengaturan Teleprompter",appLanguageLabel:"Bahasa aplikasi",settings:"⚙ Pengaturan",fullscreen:"⛶ Layar penuh",camera:"📷 Kamera",flip:"↻ Balik",scroll:"▶ Mulai gulir",pause:"Ⅱ Jeda",record:"● Rekam",zoom:"Zoom",speed:"Kecepatan",reset:"↺ Atur ulang",stopSave:"■ Hentikan dan simpan",hide:"⌄ Sembunyikan",pasteScript:"Tempel naskah di sini",scriptPlaceholder:"Tempel naskah di sini",saveScript:"Simpan naskah",done:"Selesai",textSize:"Ukuran teks",panelHeight:"Tinggi panel naskah",textColour:"Warna teks",panelColour:"Warna panel",scriptBackground:"Latar naskah",backgroundOn:"Latar: aktif",backgroundOff:"Latar: nonaktif",alignment:"Perataan",cameraFilter:"Filter kamera",voiceEnhancement:"Peningkatan suara",videoFormat:"Format video",frontCamera:"Kamera depan",backCamera:"Kamera belakang",recordingReady:"Rekaman siap",back:"Kembali"},
+ tr:{settingsTitle:"Teleprompter Ayarları",appLanguageLabel:"Uygulama dili",settings:"⚙ Ayarlar",fullscreen:"⛶ Tam ekran",camera:"📷 Kamera",flip:"↻ Çevir",scroll:"▶ Kaydırmayı başlat",pause:"Ⅱ Duraklat",record:"● Kaydet",zoom:"Yakınlaştır",speed:"Hız",reset:"↺ Sıfırla",stopSave:"■ Durdur ve kaydet",hide:"⌄ Gizle",pasteScript:"Metninizi buraya yapıştırın",scriptPlaceholder:"Metninizi buraya yapıştırın",saveScript:"Metni kaydet",done:"Tamam",textSize:"Metin boyutu",panelHeight:"Metin paneli yüksekliği",textColour:"Metin rengi",panelColour:"Panel rengi",scriptBackground:"Metin arka planı",backgroundOn:"Arka plan: açık",backgroundOff:"Arka plan: kapalı",alignment:"Hizalama",cameraFilter:"Kamera filtresi",voiceEnhancement:"Ses iyileştirme",videoFormat:"Video biçimi",frontCamera:"Ön kamera",backCamera:"Arka kamera",recordingReady:"Kayıt hazır",back:"Geri"},
+ zh:{settingsTitle:"提词器设置",appLanguageLabel:"应用语言",settings:"⚙ 设置",fullscreen:"⛶ 全屏",camera:"📷 相机",flip:"↻ 翻转",scroll:"▶ 开始滚动",pause:"Ⅱ 暂停",record:"● 录制",zoom:"缩放",speed:"速度",reset:"↺ 重置",stopSave:"■ 停止并保存",hide:"⌄ 隐藏",pasteScript:"在此粘贴脚本",scriptPlaceholder:"在此粘贴脚本",saveScript:"保存脚本",done:"完成",textSize:"文字大小",panelHeight:"脚本面板高度",textColour:"文字颜色",panelColour:"面板颜色",scriptBackground:"脚本背景",backgroundOn:"背景：开启",backgroundOff:"背景：关闭",alignment:"对齐",cameraFilter:"相机滤镜",voiceEnhancement:"声音增强",videoFormat:"视频格式",frontCamera:"前置摄像头",backCamera:"后置摄像头",recordingReady:"录制已就绪",back:"返回"},
+ ja:{settingsTitle:"テレプロンプター設定",appLanguageLabel:"アプリの言語",settings:"⚙ 設定",fullscreen:"⛶ 全画面",camera:"📷 カメラ",flip:"↻ 反転",scroll:"▶ スクロール開始",pause:"Ⅱ 一時停止",record:"● 録画",zoom:"ズーム",speed:"速度",reset:"↺ リセット",stopSave:"■ 停止して保存",hide:"⌄ 隠す",pasteScript:"ここに原稿を貼り付け",scriptPlaceholder:"ここに原稿を貼り付け",saveScript:"原稿を保存",done:"完了",textSize:"文字サイズ",panelHeight:"原稿パネルの高さ",textColour:"文字色",panelColour:"パネルの色",scriptBackground:"原稿の背景",backgroundOn:"背景：オン",backgroundOff:"背景：オフ",alignment:"配置",cameraFilter:"カメラフィルター",voiceEnhancement:"音声補正",videoFormat:"動画形式",frontCamera:"前面カメラ",backCamera:"背面カメラ",recordingReady:"録画の準備完了",back:"戻る"}
+};
+Object.assign(UI_TEXT,EXTRA_TEXT);
+
+function applyLanguage(lang){
+ const dict=UI_TEXT[lang]||UI_TEXT.en;
+ document.documentElement.lang=lang;
+ document.documentElement.dir=(lang==='ur'||lang==='ar')?'rtl':'ltr';
+ document.querySelectorAll("[data-i18n]").forEach(el=>{
+   const key=el.getAttribute("data-i18n");
+   if(dict[key]) el.textContent=dict[key];
+ });
+ document.querySelectorAll("[data-i18n-placeholder]").forEach(el=>{
+   const key=el.getAttribute("data-i18n-placeholder");
+   if(dict[key]) el.placeholder=dict[key];
+ });
+ const align=document.getElementById("alignment");
+ if(align){[...align.options].forEach(o=>{const k=o.value; if(dict[k])o.textContent=dict[k]})}
+ try{localStorage.setItem("tp-social-language",lang)}catch(e){}
+}
+
+const $=id=>document.getElementById(id);
+const languageSelect=$('appLanguage');
+if(languageSelect){
+ let savedLang='en';try{savedLang=localStorage.getItem('tp-social-language')||'en'}catch(e){}
+ languageSelect.value=savedLang;applyLanguage(savedLang);
+ languageSelect.addEventListener('change',e=>{applyLanguage(e.target.value);const d=UI_TEXT[e.target.value]||UI_TEXT.en;$('scrollBtn').textContent=scrolling?(d.pause||'Ⅱ Pause'):(d.scroll||'▶ Start Scroll');if(recorder&&recorder.state==='recording')$('recordBtn').textContent='Ⅱ Pause Rec';else if(recorder&&recorder.state==='paused')$('recordBtn').textContent='▶ Resume';say('App language changed.')});
+}
+let stream=null,recorder=null,chunks=[],facing='user',mirror=true,scrolling=false,offset=0,last=0,raf=0,canvas=null,drawRaf=0,zoom=.75,controlsVisible=true,bgVisible=true,bgOpacity=82,audioContext=null;
+
+// English automatic captions (browser speech recognition).
+let captionEnabled=false, captionText='', captionFinal='', captionRecognition=null;
+function stopCaptionRecognition(){
+ if(captionRecognition){try{captionRecognition.onend=null;captionRecognition.stop();}catch(e){}}
+ captionRecognition=null;
+}
+function showCaptionStatus(msg){say('Captions: '+msg)}
+function updateLiveCaption(){const el=$('liveCaption');el.textContent=captionText;el.style.display=(captionEnabled&&captionText)?'block':'none'}
+function startCaptionRecognition(){
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){showCaptionStatus('Speech recognition is NOT supported by this browser.');return;}
+ stopCaptionRecognition();
+ captionRecognition=new SR();
+ captionRecognition.lang='en-US';
+ captionRecognition.continuous=true;
+ captionRecognition.interimResults=true;
+ captionRecognition.onresult=e=>{
+   let interim='';
+   for(let i=e.resultIndex;i<e.results.length;i++){
+     const t=e.results[i][0].transcript.trim();
+     if(e.results[i].isFinal) captionFinal=(captionFinal+' '+t).trim();
+     else interim=(interim+' '+t).trim();
+   }
+   captionText=(captionFinal+' '+interim).trim().split(/\s+/).slice(-16).join(' ');
+   updateLiveCaption();
+   if(captionText) showCaptionStatus('Listening… text received');
+ };
+ captionRecognition.onerror=e=>{
+   showCaptionStatus('ERROR: '+e.error+' (Chrome speech service)');
+ };
+ captionRecognition.onstart=()=>showCaptionStatus('Listening… ab boliye');
+ captionRecognition.onend=()=>{
+   if(captionEnabled && recorder && recorder.state==='recording'){
+     try{captionRecognition.start();}catch(e){showCaptionStatus('Restart failed: '+e.message)}
+   }
+ };
+ try{captionRecognition.start();}catch(e){showCaptionStatus('START ERROR: '+e.message)}
+}
+// Standalone speech test: temporarily releases the camera stream's microphone
+// so Android Chrome's Web Speech service can be tested without competing mic capture.
+let speechTestRecognition=null, speechTestRunning=false, priorAudioStates=[];
+function stopSpeechTest(){
+ speechTestRunning=false;
+ if(speechTestRecognition){try{speechTestRecognition.onend=null;speechTestRecognition.stop()}catch(e){}speechTestRecognition=null;}
+ if(stream){const tracks=stream.getAudioTracks();tracks.forEach((t,i)=>{t.enabled=priorAudioStates[i]!==false});}
+ priorAudioStates=[];
+ $('speechTestBtn').textContent='🎙 Test Captions (mic only)';
+ showCaptionStatus('Test stopped. Camera microphone restored.');
+}
+$('speechTestBtn').onclick=()=>{
+ if(speechTestRunning){stopSpeechTest();return;}
+ if(recorder&&recorder.state==='recording'){say('Pehle recording Stop & Save karein, phir mic test karein.');return;}
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){say('ERROR: Is Chrome mein SpeechRecognition API available nahi hai.');return;}
+ priorAudioStates=[];
+ if(stream){stream.getAudioTracks().forEach(t=>{priorAudioStates.push(t.enabled);t.enabled=false;});}
+ try{
+  speechTestRecognition=new SR();speechTestRecognition.lang='en-US';speechTestRecognition.continuous=true;speechTestRecognition.interimResults=true;
+  speechTestRecognition.onstart=()=>{speechTestRunning=true;$('speechTestBtn').textContent='■ Stop Speech Test';showCaptionStatus('Test listening. English mein boliye…');};
+  speechTestRecognition.onresult=e=>{
+   let parts=[];for(let i=e.resultIndex;i<e.results.length;i++)parts.push(e.results[i][0].transcript);
+   const heard=parts.join(' ').trim();if(heard){captionEnabled=true;captionText=heard;updateLiveCaption();showCaptionStatus('TEST SUCCESS: '+heard);}
+  };
+  speechTestRecognition.onerror=e=>{showCaptionStatus('TEST ERROR: '+e.error);};
+  speechTestRecognition.onend=()=>{if(speechTestRunning){speechTestRunning=false;showCaptionStatus('Test ended. Tap Test Captions to try again.');}};
+  speechTestRecognition.start();say('Speech test starting…');
+ }catch(e){showCaptionStatus('TEST START ERROR: '+e.message);stopSpeechTest();}
+};
+
+$('captionBtn').onclick=()=>{
+ captionEnabled=!captionEnabled;
+ $('captionBtn').textContent='CC Captions: '+(captionEnabled?'ON':'OFF');
+ if(captionEnabled){
+   if(recorder && recorder.state==='recording') startCaptionRecognition();
+   else say('English captions ON. Ab Record dabayein.');
+ }else{
+   stopCaptionRecognition();captionText='';captionFinal='';updateLiveCaption();
+   say('Captions OFF. Recording normal chalegi.');
+ }
+};
+
+function say(s){$('status').textContent=s}
+function applyOffset(){$('scriptText').style.transform=`translateY(${-offset}px)`}
+function setScript(s){$('scriptText').textContent=s||'Settings mein apni script paste karein.'}
+$('scriptInput').value=localStorage.getItem('tp-social-script')||'';setScript($('scriptInput').value);
+$('settingsBtn').onclick=()=>{$('settings').style.display='block';$('scriptInput').value=localStorage.getItem('tp-social-script')||''};
+$('doneBtn').onclick=()=>$('settings').style.display='none';
+$('saveBtn').onclick=()=>{localStorage.setItem('tp-social-script',$('scriptInput').value);setScript($('scriptInput').value);offset=0;applyOffset();$('settings').style.display='none';say('Script save ho gayi.')};
+function applyStyle(){
+ const v=$('fontStyle').value, el=$('scriptOverlay');
+ el.style.fontFamily=v==='elegant'?'Georgia,serif':(v==='clean'?'Arial,sans-serif':'Arial,sans-serif');
+ el.style.fontWeight=(v==='clean'||v==='elegant')?'500':'800';
+ el.style.fontStyle=v==='elegant'?'italic':'normal';
+ el.style.textShadow=v==='neon'?'0 0 5px #00eaff,0 0 12px #00eaff':(v==='shadow'||v==='bold'?'0 3px 7px #000':'none');
+ if(v==='gradient'){el.style.color='#ffe36e';el.style.backgroundImage='linear-gradient(110deg,rgba(35,0,70,.88),rgba(0,0,0,.78))'}
+ else {el.style.backgroundImage='none'}
+}
+$('fontSize').oninput=e=>$('scriptOverlay').style.fontSize=e.target.value+'px';
+$('fontStyle').onchange=applyStyle;
+$('zoom').oninput=e=>{zoom=Number(e.target.value);$('zoomNum').textContent=zoom.toFixed(2)+'×';$('camera').style.setProperty('--zoom',zoom)};
+$('panelHeight').oninput=e=>$('scriptOverlay').style.height=e.target.value+'%';
+$('textColor').oninput=e=>{$('scriptOverlay').style.color=e.target.value};
+$('bgColor').oninput=e=>$('scriptOverlay').style.backgroundColor=e.target.value;
+function applyPanelBackground(){
+ const alpha=bgVisible?bgOpacity/100:0;
+ const c=$('bgColor').value;
+ const r=parseInt(c.slice(1,3),16),g=parseInt(c.slice(3,5),16),b=parseInt(c.slice(5,7),16);
+ $('scriptOverlay').style.backgroundColor=`rgba(${r},${g},${b},${alpha})`;
+ $('opacityNum').textContent=bgVisible?bgOpacity+'%':'OFF';
+ const lang=$('appLanguage')?.value||'en';
+ $('bgToggle').textContent=(UI_TEXT[lang]||UI_TEXT.en)[bgVisible?'backgroundOn':'backgroundOff'];
+}
+$('bgOpacity').oninput=e=>{bgOpacity=Number(e.target.value);applyPanelBackground()};
+$('bgColor').oninput=applyPanelBackground;
+$('bgToggle').onclick=()=>{bgVisible=!bgVisible;applyPanelBackground()};
+
+$('alignment').onchange=e=>$('scriptOverlay').className=e.target.value;
+const cameraFilters={natural:'none',beauty:'brightness(1.08) contrast(.94) saturate(1.08)',cinematic:'contrast(1.18) saturate(.82) sepia(.12)',warm:'brightness(1.05) saturate(1.22) sepia(.18)',cool:'contrast(1.05) saturate(.9) hue-rotate(8deg)',bw:'grayscale(1) contrast(1.12)'};
+$('cameraFilter').onchange=e=>{$('camera').style.setProperty('--camera-filter',cameraFilters[e.target.value]||'none')};
+function colors(text,bg){$('textColor').value=text;$('bgColor').value=bg;$('scriptOverlay').style.color=text;applyPanelBackground()}
+$('presetWhite').onclick=()=>colors('#ffffff','#000000');
+$('presetGold').onclick=()=>colors('#ffe08a','#160d00');
+$('presetPink').onclick=()=>colors('#ffd6f4','#3b0645');
+$('presetCyan').onclick=()=>colors('#aafaff','#031d36');
+function speed(v){$('speed').value=Math.max(5,Math.min(100,v));$('speedNum').textContent=$('speed').value}
+function setControlsVisible(show){
+ controlsVisible=show;
+ $('dock').style.display=show?'block':'none';
+ $('topbar').style.display=show?'flex':'none';
+ $('recordBadge').style.display=(!show && recorder && recorder.state==='recording')?'block':'none';
+}
+$('app').addEventListener('click',e=>{
+ if(e.target.closest('button,input,select,textarea,a,#settings,#result'))return;
+ if(!controlsVisible){setControlsVisible(true);return;}
+ if(recorder&&recorder.state==='recording')setControlsVisible(false);
+});
+
+function scrollTick(t){if(!scrolling)return;if(last)offset+=(t-last)*Number($('speed').value)/2500;last=t;applyOffset();raf=requestAnimationFrame(scrollTick)}
+function setScrollState(on){scrolling=on;cancelAnimationFrame(raf);last=0;if(on)raf=requestAnimationFrame(scrollTick);const d=UI_TEXT[$('appLanguage').value]||UI_TEXT.en;$('scrollBtn').textContent=on?(d.pause||'Ⅱ Pause'):(d.scroll||'▶ Start Scroll');}
+function toggleScroll(){setScrollState(!scrolling);say(scrolling?'Script scrolling chal rahi hai.':'Scrolling pause hai.')}
+$('scrollBtn').onclick=toggleScroll;
+$('resetBtn').onclick=()=>{setScrollState(false);offset=0;applyOffset()};
+$('speed').oninput=e=>speed(+e.target.value);$('minus').onclick=()=>speed(+$('speed').value-5);$('plus').onclick=()=>speed(+$('speed').value+5);
+async function startCamera(){try{if(!navigator.mediaDevices?.getUserMedia)throw Error('Chrome HTTPS page use karein.');if(stream)stream.getTracks().forEach(t=>t.stop());
+stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30,max:30}},audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+$('camera').srcObject=stream;$('camera').classList.toggle('mirror',facing==='user'&&mirror);$('camera').style.setProperty('--zoom',zoom);await $('camera').play();say('Camera + microphone ready.')}catch(e){say('Camera error: '+e.message)}}
+$('cameraBtn').onclick=startCamera;$('frontBtn').onclick=()=>{facing='user';startCamera()};$('backBtn').onclick=()=>{facing='environment';startCamera()};
+$('flipBtn').onclick=()=>{mirror=!mirror;$('camera').classList.toggle('mirror',facing==='user'&&mirror)};
+$('fullBtn').onclick=async()=>{try{await $('app').requestFullscreen()}catch(e){say('Fullscreen browser setting par depend karta hai.')}};
+function makeCanvas(){let c=document.createElement('canvas'),land=$('format').value==='landscape';c.width=land?1920:1080;c.height=land?1080:1920;return c}
+function wrapLines(ctx,text,maxWidth){let lines=[];for(const para of text.split('\n')){let words=para.split(/\s+/),line='';for(const word of words){let test=line?line+' '+word:word;if(ctx.measureText(test).width>maxWidth&&line){lines.push(line);line=word}else line=test}lines.push(line)}return lines}
+function drawFrame(ctx,c){
+ let w=c.width,h=c.height,v=$('camera');ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);
+ if(v.readyState>=2&&v.videoWidth){let scale=Math.max(w/v.videoWidth,h/v.videoHeight)*zoom,dw=v.videoWidth*scale,dh=v.videoHeight*scale;ctx.save();ctx.beginPath();ctx.rect(0,0,w,h);ctx.clip();ctx.filter=cameraFilters[$('cameraFilter').value]||'none';if(facing==='user'&&mirror){ctx.translate(w,0);ctx.scale(-1,1)}ctx.drawImage(v,(w-dw)/2,(h-dh)/2,dw,dh);ctx.restore();ctx.filter='none'}
+ let panelH=h*(Number($('panelHeight').value)/100);if(bgVisible&&bgOpacity>0){ctx.fillStyle=$('bgColor').value;ctx.globalAlpha=bgOpacity/100;ctx.fillRect(0,0,w,panelH);ctx.globalAlpha=1;}
+ let fs=Number($('fontSize').value)*(w/Math.max(1,window.innerWidth)),pad=22*(w/Math.max(1,window.innerWidth)),style=$('fontStyle').value;
+ ctx.font=`${style==='clean'||style==='elegant'?'500':'800'} ${fs}px ${style==='elegant'?'Georgia':'Arial'}`;
+ let align=$('alignment').value,x=align==='left'?pad:align==='center'?w/2:w-pad;
+ if(style==='gradient'){let g=ctx.createLinearGradient(0,0,w,0);g.addColorStop(0,'#ff72d2');g.addColorStop(.5,'#ffe66d');g.addColorStop(1,'#69f5ff');ctx.fillStyle=g}
+ else ctx.fillStyle=$('textColor').value;
+ ctx.textAlign=align;ctx.shadowColor=style==='neon'?'#00eaff':'rgba(0,0,0,.8)';ctx.shadowBlur=style==='neon'?14:(style==='shadow'||style==='bold'?5:0);
+ let lines=wrapLines(ctx,$('scriptText').textContent,w-pad*2),lineH=fs*1.45;
+ lines.forEach((line,i)=>{let y=pad+fs+i*lineH-offset*(w/Math.max(1,window.innerWidth));if(y>0&&y<panelH)ctx.fillText(line,x,y)});
+ ctx.shadowBlur=0;
+ if(captionEnabled && captionText){
+   let capSize=Math.max(26,fs*.78);
+   ctx.save();
+   ctx.font=`800 ${capSize}px Arial`;
+   ctx.textAlign='center';
+   let capLines=wrapLines(ctx,captionText,w-pad*2);
+   let capLineH=capSize*1.22, capY=h*.79;
+   ctx.fillStyle='rgba(0,0,0,.62)';
+   ctx.fillRect(w*.04,capY-capSize*.95,w*.92,capLines.length*capLineH+capSize*.45);
+   ctx.fillStyle='#fff';ctx.shadowColor='#000';ctx.shadowBlur=4;
+   capLines.forEach((line,i)=>ctx.fillText(line,w/2,capY+i*capLineH));
+   ctx.restore();
+ }
+}
+function drawLoop(){if(!recorder||recorder.state!=='recording')return;drawFrame(canvas.getContext('2d'),canvas);drawRaf=requestAnimationFrame(drawLoop)}
+$('recordBtn').onclick=async()=>{if(recorder&&recorder.state==='recording'){recorder.pause();cancelAnimationFrame(drawRaf);$('recordBtn').textContent='▶ Resume';say('Recording pause hai.');return;}if(recorder&&recorder.state==='paused'){recorder.resume();$('recordBtn').textContent='Ⅱ Pause Rec';drawLoop();say('Recording resume ho gayi.');return;}if(!stream){say('Pehle Camera start karein.');return}try{canvas=makeCanvas();drawFrame(canvas.getContext('2d'),canvas);
+let vtrack=canvas.captureStream(30).getVideoTracks()[0],audioTracks=stream.getAudioTracks();
+if(audioTracks.length&&$('voiceMode').value==='clear'){
+ audioContext=new (window.AudioContext||window.webkitAudioContext)();await audioContext.resume();
+ let source=audioContext.createMediaStreamSource(new MediaStream(audioTracks)),highpass=audioContext.createBiquadFilter(),compressor=audioContext.createDynamicsCompressor(),gain=audioContext.createGain();
+ highpass.type='highpass';highpass.frequency.value=80;compressor.threshold.value=-24;compressor.knee.value=24;compressor.ratio.value=3;compressor.attack.value=.003;compressor.release.value=.25;gain.gain.value=1.12;
+ let dest=audioContext.createMediaStreamDestination();source.connect(highpass).connect(compressor).connect(gain).connect(dest);audioTracks=dest.stream.getAudioTracks();
+}
+let combined=new MediaStream([vtrack,...audioTracks]);
+let candidates=['video/mp4;codecs=avc1,mp4a.40.2','video/mp4','video/webm;codecs=vp8,opus','video/webm'];let type=candidates.find(t=>MediaRecorder.isTypeSupported(t))||'';
+recorder=new MediaRecorder(combined,type?{mimeType:type,videoBitsPerSecond:6000000,audioBitsPerSecond:128000}:{});chunks=[];
+recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+recorder.onstop=()=>{stopCaptionRecognition();cancelAnimationFrame(drawRaf);if(audioContext){audioContext.close();audioContext=null}let mime=recorder.mimeType||'video/webm',ext=mime.includes('mp4')?'mp4':'webm',blob=new Blob(chunks,{type:mime}),url=URL.createObjectURL(blob);$('playback').src=url;$('download').href=url;$('download').download='teleprompter-social.'+ext;$('result').style.display='block';say('Recording ready. Download karein.')};
+recorder.start(1000);$('recordBadge').style.display='none';if(captionEnabled){captionText='';captionFinal='';startCaptionRecognition();}drawLoop();setControlsVisible(true);$('recordBtn').textContent='Ⅱ Pause Rec';say('Recording chal rahi hai. Screen par khaali jagah tap karke controls hide/show karein.')
+}catch(e){say('Recording error: '+e.message)}};
+$('stopBtn').onclick=()=>{if(recorder&&recorder.state==='recording'){recorder.stop();$('recordBadge').style.display='none';$('recordBtn').textContent=(UI_TEXT[$('appLanguage').value]||UI_TEXT.en).record||'● Record';setControlsVisible(true)}else say('Abhi recording nahi chal rahi.')};
+$('closeResult').onclick=()=>$('result').style.display='none';
+$('hideBtn').onclick=()=>setControlsVisible(false);
+$('zoom').value=zoom;$('camera').style.setProperty('--zoom',zoom);speed(35);applyStyle();applyPanelBackground();
+</script></body></html>
